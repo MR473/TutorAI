@@ -30,8 +30,13 @@ async def entrypoint(ctx: agents.JobContext):
 
     session = AgentSession(
         stt = deepgram.STT(model="nova-2"),
+        # llm = openai.LLM.with_ollama(
+        #     model = os.getenv("LLM_CHOICE"),
+        #     base_url = "http://localhost:11434/v1",
+        # ),
         llm = openai.LLM(model=os.getenv("LLM_CHOICE", "gpt-4.1-mini")),
         tts = openai.TTS(voice="echo"),
+        #tts = deepgram.TTS(model="aura-2-asteria-en"),
         vad = silero.VAD.load(),    
     )
 
