@@ -84,8 +84,56 @@ body {
 }
 
 .debug-pane h2 {
-  margin: 0 0 0.7rem;
+  margin: 0 0 0.5rem;
   font-size: 1rem;
+}
+
+.panel-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.command-input {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  padding: 0.65rem;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  margin-bottom: 0.6rem;
+}
+
+.run-actions-btn {
+  width: 100%;
+  border: 1px solid #1d4ed8;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.7rem;
+}
+
+.run-actions-btn:disabled {
+  opacity: 0.55;
+}
+
+.command-errors {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  padding: 0.55rem;
+  margin-bottom: 0.8rem;
+}
+
+.command-errors p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b91c1c;
 }
 
 .debug-pane pre {

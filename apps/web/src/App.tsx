@@ -16,7 +16,8 @@ type HighlightAction = {
   h: number;
 };
 type ClearAction = { type: "clear"; slide?: number };
-type SlideAction = PointerAction | HighlightAction | ClearAction;
+type GoToSlideAction = { type: "go_to_slide"; slide: number };
+type SlideAction = PointerAction | HighlightAction | ClearAction | GoToSlideAction;
 
 type DrawAction = PointerAction | HighlightAction;
 
@@ -33,6 +34,10 @@ function buildDrawActionsForSlide(actions: SlideAction[], slide: number): DrawAc
   const draw: DrawAction[] = [];
 
   actions.forEach((action) => {
+    if (action.type === "go_to_slide") {
+      return;
+    }
+
     if (action.type === "clear") {
       if (action.slide === undefined || action.slide === slide) {
         draw.length = 0;
@@ -73,6 +78,12 @@ export default function App() {
   const [dragStart, setDragStart] = useState<NormalizedPoint | null>(null);
   const [dragCurrent, setDragCurrent] = useState<NormalizedPoint | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [commandInput, setCommandInput] = useState<string>(`[
+  { "type": "go_to_slide", "slide": 2 },
+  { "type": "highlight", "slide": 2, "x": 0.18, "y": 0.3, "w": 0.5, "h": 0.12 },
+  { "type": "pointer", "slide": 2, "x": 0.7, "y": 0.4 }
+]`);
+  const [commandErrors, setCommandErrors] = useState<string[]>([]);
 
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
@@ -153,19 +164,154 @@ export default function App() {
 
   function onDocumentLoadSuccess(result: { numPages: number }) {
     setPdfError(null);
+    setActions([]);
+    setCommandErrors([]);
     setNumPages(result.numPages);
     setCurrentPage(1);
   }
 
+  function isValidSlide(slide: unknown): slide is number {
+    return typeof slide === "number" && Number.isInteger(slide) && slide >= 1 && slide <= numPages;
+  }
+
+  function isNormalized(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+  }
+
+  function validateAction(raw: unknown): { valid: true; action: SlideAction } | { valid: false; error: string } {
+    if (!raw || typeof raw !== "object") {
+      return { valid: false, error: "Action is not an object." };
+    }
+
+    const action = raw as Record<string, unknown>;
+    if (typeof action.type !== "string") {
+      return { valid: false, error: "Action is missing a string 'type'." };
+    }
+
+    if (action.type === "go_to_slide") {
+      if (!isValidSlide(action.slide)) {
+        return { valid: false, error: "go_to_slide requires a valid slide number." };
+      }
+      return { valid: true, action: { type: "go_to_slide", slide: action.slide } };
+    }
+
+    if (action.type === "clear") {
+      if (action.slide === undefined) {
+        return { valid: true, action: { type: "clear" } };
+      }
+      if (!isValidSlide(action.slide)) {
+        return { valid: false, error: "clear.slide must be a valid slide number when provided." };
+      }
+      return { valid: true, action: { type: "clear", slide: action.slide } };
+    }
+
+    if (action.type === "pointer") {
+      if (!isValidSlide(action.slide)) {
+        return { valid: false, error: "pointer.slide must be a valid slide number." };
+      }
+      if (!isNormalized(action.x) || !isNormalized(action.y)) {
+        return { valid: false, error: "pointer x/y must be numbers between 0 and 1." };
+      }
+      return {
+        valid: true,
+        action: { type: "pointer", slide: action.slide, x: action.x, y: action.y }
+      };
+    }
+
+    if (action.type === "highlight") {
+      if (!isValidSlide(action.slide)) {
+        return { valid: false, error: "highlight.slide must be a valid slide number." };
+      }
+      if (!isNormalized(action.x) || !isNormalized(action.y)) {
+        return { valid: false, error: "highlight x/y must be numbers between 0 and 1." };
+      }
+      if (typeof action.w !== "number" || typeof action.h !== "number" || action.w <= 0 || action.h <= 0) {
+        return { valid: false, error: "highlight w/h must be positive numbers." };
+      }
+      if (action.x + action.w > 1 || action.y + action.h > 1) {
+        return { valid: false, error: "highlight rectangle must stay inside normalized bounds." };
+      }
+      return {
+        valid: true,
+        action: {
+          type: "highlight",
+          slide: action.slide,
+          x: action.x,
+          y: action.y,
+          w: action.w,
+          h: action.h
+        }
+      };
+    }
+
+    return { valid: false, error: `Unknown action type '${action.type}'.` };
+  }
+
+  function runAction(
+    action: SlideAction,
+    state: { actions: SlideAction[]; page: number }
+  ): { actions: SlideAction[]; page: number } {
+    if (action.type === "go_to_slide") {
+      return { actions: state.actions, page: action.slide };
+    }
+
+    if (action.type === "clear") {
+      if (action.slide === undefined) {
+        return { actions: [...state.actions, { type: "clear" }], page: state.page };
+      }
+      return { actions: [...state.actions, action], page: action.slide };
+    }
+
+    return { actions: [...state.actions, action], page: action.slide };
+  }
+
+  function runActions(batch: SlideAction[]) {
+    const errors: string[] = [];
+    let next = { actions, page: currentPage };
+
+    batch.forEach((action, index) => {
+      const validated = validateAction(action);
+      if (!validated.valid) {
+        const message = `Action ${index + 1}: ${validated.error}`;
+        errors.push(message);
+        console.error(message, action);
+        return;
+      }
+      next = runAction(validated.action, next);
+    });
+
+    if (errors.length > 0) {
+      setCommandErrors(errors);
+    } else {
+      setCommandErrors([]);
+    }
+
+    setActions(next.actions);
+    setCurrentPage(next.page);
+  }
+
+  function runActionsFromInput() {
+    if (!file || numPages === 0) {
+      setCommandErrors(["Load a PDF before running actions."]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(commandInput) as unknown;
+      const batch = Array.isArray(parsed) ? parsed : [parsed];
+      runActions(batch as SlideAction[]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown JSON parse error.";
+      setCommandErrors([`Invalid JSON: ${message}`]);
+    }
+  }
+
   function addCenterPointer() {
-    setActions((prev) => [
-      ...prev,
-      { type: "pointer", slide: currentPage, x: 0.5, y: 0.5 }
-    ]);
+    runActions([{ type: "pointer", slide: currentPage, x: 0.5, y: 0.5 }]);
   }
 
   function clearCurrentOverlay() {
-    setActions((prev) => [...prev, { type: "clear", slide: currentPage }]);
+    runActions([{ type: "clear", slide: currentPage }]);
     setDragStart(null);
     setDragCurrent(null);
   }
@@ -198,7 +344,7 @@ export default function App() {
     const h = Math.abs(dragCurrent.y - dragStart.y);
 
     if (w > 0.002 && h > 0.002) {
-      setActions((prev) => [...prev, { type: "highlight", slide: currentPage, x, y, w, h }]);
+      runActions([{ type: "highlight", slide: currentPage, x, y, w, h }]);
     }
 
     setDragStart(null);
@@ -218,6 +364,8 @@ export default function App() {
               setPdfError(null);
               setNumPages(0);
               setCurrentPage(1);
+              setActions([]);
+              setCommandErrors([]);
               setFile(event.target.files?.[0] ?? null);
             }}
           />
@@ -284,7 +432,26 @@ export default function App() {
         </section>
 
         <aside className="debug-pane">
-          <h2>Actions</h2>
+          <h2>Command Runner</h2>
+          <p className="panel-label">Paste JSON action(s):</p>
+          <textarea
+            className="command-input"
+            value={commandInput}
+            onChange={(event) => setCommandInput(event.target.value)}
+            spellCheck={false}
+          />
+          <button className="run-actions-btn" onClick={runActionsFromInput} disabled={!file || numPages === 0}>
+            Run Actions
+          </button>
+          {commandErrors.length > 0 ? (
+            <div className="command-errors">
+              {commandErrors.map((error, index) => (
+                <p key={`${error}-${index}`}>{error}</p>
+              ))}
+            </div>
+          ) : null}
+
+          <h2>Actions State</h2>
           <pre>{JSON.stringify(actions, null, 2)}</pre>
         </aside>
       </main>
