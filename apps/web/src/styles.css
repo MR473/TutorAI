@@ -1,0 +1,124 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #111827;
+  background: #f1f5f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.top-bar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #dbe4f0;
+  background: #ffffff;
+}
+
+.top-bar button,
+.upload-control {
+  border: 1px solid #c7d2e0;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.92rem;
+}
+
+.top-bar button:disabled {
+  opacity: 0.55;
+}
+
+.upload-control input {
+  display: none;
+}
+
+.page-indicator {
+  margin-left: 0.2rem;
+  font-weight: 600;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  min-height: 0;
+}
+
+.viewer-pane {
+  padding: 1rem;
+  overflow: auto;
+}
+
+.page-stage {
+  position: relative;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.react-pdf__Page {
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.14);
+}
+
+.overlay-canvas {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.debug-pane {
+  border-left: 1px solid #dbe4f0;
+  background: #fbfdff;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.debug-pane h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+}
+
+.debug-pane pre {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.empty-state {
+  min-height: 55vh;
+  display: grid;
+  place-items: center;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #475569;
+  background: #f8fafc;
+}
+
+@media (max-width: 980px) {
+  .top-bar {
+    flex-wrap: wrap;
+  }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .debug-pane {
+    border-left: 0;
+    border-top: 1px solid #dbe4f0;
+    max-height: 240px;
+  }
+}
